@@ -1,0 +1,1110 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>주거복지 사각지대 탐지 대시보드</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <link rel="stylesheet" href="../_shared/system-nav.css">
+  <style>
+    :root {
+      --st-primary:  #FF4B4B;
+      --st-bg:       #FFFFFF;
+      --st-sec-bg:   #F0F2F6;
+      --st-text:     #262730;
+      --st-muted:    #6c757d;
+      --st-border:   #d9d9d9;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Segoe UI', 'Malgun Gothic', sans-serif;
+      background: var(--st-bg);
+      color: var(--st-text);
+      font-size: 14px;
+    }
+
+    /* ── Layout ── */
+    .app { display: flex; height: 100vh; overflow: hidden; }
+
+    /* ── Sidebar ── */
+    .sidebar {
+      width: 360px; min-width: 360px;
+      background: var(--st-sec-bg);
+      border-right: 1px solid var(--st-border);
+      overflow-y: auto;
+      padding: 1.2rem 1rem 2rem;
+      display: flex; flex-direction: column; gap: 0;
+    }
+    .sb-title { font-size: .95rem; font-weight: 700; color: var(--st-text); line-height: 1.4; margin-bottom: .15rem; }
+    .sb-caption { font-size: .72rem; color: var(--st-muted); }
+    .sb-hr { border: none; border-top: 1px solid var(--st-border); margin: .7rem 0; }
+    .sb-subhead { font-size: .8rem; font-weight: 700; color: var(--st-text); margin-bottom: .4rem; }
+    .sb-label { font-size: .76rem; color: var(--st-text); margin-bottom: 2px; display: block; }
+    .sb-note { font-size: .7rem; color: var(--st-muted); line-height: 1.5; }
+
+    .sidebar select,
+    .sidebar input[type=text] {
+      width: 100%; padding: .28rem .5rem; font-size: .8rem;
+      border: 1px solid var(--st-border); border-radius: 4px;
+      background: #fff; color: var(--st-text); margin-bottom: .5rem;
+    }
+    .sidebar select:focus, .sidebar input:focus {
+      outline: none; border-color: var(--st-primary);
+      box-shadow: 0 0 0 2px rgba(255,75,75,.15);
+    }
+    .sidebar select[multiple] {
+      padding: 2px 4px; height: auto; font-size: .78rem;
+    }
+    .sidebar select[multiple] option { padding: 3px 6px; border-radius: 3px; }
+    .sidebar select[multiple] option:checked { background: rgba(255,75,75,.15); color: var(--st-text); }
+    .form-check-label { font-size: .8rem; }
+    .form-check-input:checked { background-color: var(--st-primary); border-color: var(--st-primary); }
+
+    /* ── Main ── */
+    .main { flex: 1; overflow-y: auto; display: flex; flex-direction: column; }
+
+    /* ── KPI ── */
+    .kpi-row {
+      display: grid; grid-template-columns: repeat(5,1fr);
+      gap: .7rem; padding: 1.1rem 1.4rem .5rem;
+    }
+    .kpi-card { background: var(--st-sec-bg); border-radius: 6px; padding: .7rem .9rem; }
+    .kpi-label { font-size: .72rem; color: var(--st-muted); margin-bottom: .15rem; }
+    .kpi-val { font-size: 1.45rem; font-weight: 700; line-height: 1; }
+    .kpi-delta { font-size: .88rem; font-weight: 700; color: #d62728; margin-top: 2px; }
+
+    .main-hr { border-top: 1px solid var(--st-border); margin: .6rem 0 0; }
+
+    /* ── Tabs ── */
+    .tab-area { padding: 0 1.4rem; }
+    .nav-tabs { border-bottom: 1px solid var(--st-border); gap: 0; flex-wrap: nowrap; overflow-x: auto; }
+    .nav-tabs .nav-link {
+      color: var(--st-muted); border: none; border-bottom: 2px solid transparent;
+      font-size: .85rem; padding: .55rem 1rem; border-radius: 0; white-space: nowrap;
+    }
+    .nav-tabs .nav-link.active { color: var(--st-primary); border-bottom-color: var(--st-primary); background: none; }
+    .nav-tabs .nav-link:hover { color: var(--st-text); }
+    .tab-content { padding: 1rem 0 2rem; }
+
+    /* ── Common ── */
+    .st-h2 { font-size: 1.3rem; font-weight: 700; margin-bottom: .15rem; }
+    .st-caption { font-size: .78rem; color: var(--st-muted); margin-bottom: .8rem; }
+    .st-h3 { font-size: 1rem; font-weight: 600; margin: .9rem 0 .4rem; }
+
+    /* Map */
+    #mainMap { height: 600px; border-radius: 6px; border: 1px solid var(--st-border); }
+    #clusterMapDiv { height: 440px; border-radius: 6px; border: 1px solid var(--st-border); }
+
+    /* Table */
+    .tbl-wrap { border: 1px solid var(--st-border); border-radius: 6px; overflow: auto; max-height: 400px; }
+    table.st { width: 100%; font-size: .78rem; border-collapse: collapse; }
+    table.st th {
+      background: var(--st-sec-bg); color: var(--st-muted); padding: .38rem .6rem;
+      text-align: left; border-bottom: 1px solid var(--st-border);
+      position: sticky; top: 0; cursor: pointer; white-space: nowrap; z-index: 1;
+    }
+    table.st th:hover { color: var(--st-text); }
+    table.st td { padding: .32rem .6rem; border-bottom: 1px solid #f2f2f2; vertical-align: middle; }
+    table.st tr:hover { background: var(--st-sec-bg); }
+
+    /* Grade badge */
+    .gb { display:inline-block; padding: 1px 5px; border-radius: 3px; font-size: .68rem; font-weight: 600; white-space: nowrap; }
+    .gb-H { background: rgba(214,39,40,.1);  color: #d62728; }
+    .gb-M { background: rgba(255,127,14,.1); color: #ff7f0e; }
+    .gb-W { background: rgba(31,119,180,.1); color: #1f77b4; }
+    .gb-N { background: rgba(44,160,44,.1);  color: #2ca02c; }
+    .gb-X { background: rgba(127,127,127,.1);color: #7f7f7f; }
+
+    /* Score bar */
+    .sb-wrap { display: flex; align-items: center; gap: 4px; }
+    .sb-bar { width: 60px; height: 5px; background: #ddd; border-radius: 3px; overflow: hidden; flex-shrink: 0; }
+    .sb-fill { height: 100%; border-radius: 3px; }
+
+    /* Detail card */
+    .detail-card { background: var(--st-sec-bg); border-radius: 8px; padding: .9rem 1rem; margin-top: .7rem; }
+    .detail-card h5 { font-size: .88rem; font-weight: 700; margin-bottom: .5rem; }
+    .d-field { margin-bottom: 4px; }
+    .d-field .lbl { font-size: .72rem; color: var(--st-muted); }
+    .d-field .val { font-size: .82rem; font-weight: 500; }
+    .dom-row { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
+    .dom-lbl { width: 80px; font-size: .73rem; color: var(--st-muted); }
+    .dom-bar { flex: 1; height: 7px; background: #dde; border-radius: 3px; overflow: hidden; }
+    .dom-fill { height: 100%; background: #4a90e2; border-radius: 3px; }
+    .dom-val { width: 38px; text-align: right; font-size: .73rem; }
+
+    /* Chart card */
+    .cc { background: var(--st-sec-bg); border-radius: 8px; padding: .8rem 1rem; margin-bottom: .8rem; }
+    .cc h6 { font-size: .8rem; font-weight: 700; margin-bottom: .6rem; color: var(--st-text); }
+
+    /* Info / warning box */
+    .info-box { background: #e8f4f8; border-left: 3px solid #1f77b4; border-radius: 4px; padding: .4rem .7rem; font-size: .8rem; margin-top: .5rem; }
+    .warn-box { background: #fff3cd; border-left: 3px solid #ffc107; border-radius: 4px; padding: .4rem .7rem; font-size: .8rem; margin: .4rem 0; }
+
+    /* Pagination */
+    .pg { display: flex; align-items: center; gap: .4rem; margin-top: .4rem; font-size: .78rem; }
+    .pg button { background: var(--st-sec-bg); border: 1px solid var(--st-border); border-radius: 4px; padding: 1px 9px; cursor: pointer; }
+    .pg button:disabled { opacity: .4; cursor: default; }
+    .pg button:hover:not(:disabled) { background: #e0e3e8; }
+
+    /* Legend dots */
+    .leg { display: flex; gap: 12px; flex-wrap: wrap; font-size: .73rem; color: var(--st-muted); margin-top: .4rem; }
+    .leg span { display: flex; align-items: center; gap: 4px; }
+    .dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+
+    /* Loading */
+    #loadingOverlay {
+      position: fixed; inset: 0; background: #fff; display: flex;
+      align-items: center; justify-content: center; z-index: 9999; flex-direction: column; gap: .8rem;
+    }
+    #loadingOverlay .spinner-border { color: var(--st-primary); width: 2.8rem; height: 2.8rem; }
+    #loadingOverlay p { color: var(--st-muted); font-size: .88rem; }
+
+    /* Leaflet popup */
+    .popup-n { font-weight: 700; font-size: .88rem; }
+    .popup-i { font-size: .76rem; color: #555; margin-top: 3px; }
+  </style>
+</head>
+<body>
+<nav class="system-switcher" aria-label="통합 시스템 이동">
+  <a href="../">통합 홈</a>
+  <a class="active" href="./">사각지대 탐지</a>
+  <a href="../recsys/">프로그램 추천</a>
+</nav>
+
+<div id="loadingOverlay">
+  <div class="spinner-border"></div>
+  <p>데이터 로딩 중...</p>
+</div>
+
+<div class="app">
+
+  <!-- ══════════ SIDEBAR ══════════ -->
+  <aside class="sidebar">
+    <div class="sb-title">🏠 주거 복지 사각지대 탐지 웹 대시보드</div>
+    <div class="sb-caption">Vulnerability analysis based on the welfare blindspot model</div>
+    <hr class="sb-hr">
+
+    <div class="sb-subhead">필터 설정</div>
+
+    <label class="sb-label">시도</label>
+    <select id="fSido" onchange="onSidoChange()"><option value="">전체</option></select>
+
+    <label class="sb-label">시군구</label>
+    <select id="fSgg" onchange="applyFilters()"><option value="">전체</option></select>
+
+    <label class="sb-label">공급유형</label>
+    <select id="fSupply" onchange="applyFilters()">
+      <option value="" selected>전체</option>
+    </select>
+
+    <label class="sb-label">위험등급</label>
+    <select id="fGrade" onchange="applyFilters()">
+      <option value="" selected>전체</option>
+    </select>
+
+    <hr class="sb-hr">
+    <div class="sb-subhead">특수 필터</div>
+    <div class="form-check mb-1">
+      <input class="form-check-input" type="checkbox" id="fHighOnly" onchange="applyFilters()">
+      <label class="form-check-label" for="fHighOnly">고위험 사각지대 후보만 보기</label>
+    </div>
+    <div class="form-check mb-2">
+      <input class="form-check-input" type="checkbox" id="fRobust" onchange="applyFilters()">
+      <label class="form-check-label" for="fRobust">Robust 고위험 단지만 보기 (MC freq≥0.7)</label>
+    </div>
+
+    <hr class="sb-hr">
+    <div class="sb-subhead">단지명 검색</div>
+    <input type="text" id="fSearch" placeholder="단지명 일부 입력..." oninput="applyFilters()">
+
+    <hr class="sb-hr">
+    <div class="sb-subhead">정렬 기준</div>
+    <label class="sb-label">정렬 기준</label>
+    <select id="sortCol" onchange="applyFilters()">
+      <option value="취약도_hybrid가중치">취약도_hybrid가중치</option>
+      <option value="취약도_수동가중치">취약도_수동가중치</option>
+      <option value="취약도_entropy가중치">취약도_entropy가중치</option>
+      <option value="mc_selection_frequency">mc_selection_frequency</option>
+      <option value="취약도_순위">취약도_순위</option>
+    </select>
+    <div class="form-check">
+      <input class="form-check-input" type="checkbox" id="sortAsc" onchange="applyFilters()">
+      <label class="form-check-label" for="sortAsc">오름차순 정렬</label>
+    </div>
+
+    <hr class="sb-hr">
+    <div class="sb-note">
+      본 대시보드는 정책 prior와 entropy 기반 data-driven 가중치를 결합하여 산출한 취약도 결과를 탐색하기 위한 의사결정 지원 도구입니다. 최종 사각지대 판정은 현장 검증을 통해 이루어져야 합니다.
+    </div>
+  </aside>
+
+  <!-- ══════════ MAIN ══════════ -->
+  <main class="main">
+
+    <!-- KPI -->
+    <div class="kpi-row">
+      <div class="kpi-card"><div class="kpi-label">전체 단지 수</div><div class="kpi-val" id="kpiTotal">—</div></div>
+      <div class="kpi-card"><div class="kpi-label">고위험 사각지대 후보</div><div class="kpi-val" id="kpiHigh">—</div><div class="kpi-delta" id="kpiHighPct"></div></div>
+      <div class="kpi-card"><div class="kpi-label">Robust 고위험 단지</div><div class="kpi-val" id="kpiRobust">—</div></div>
+      <div class="kpi-card"><div class="kpi-label">평균 취약도 점수</div><div class="kpi-val" id="kpiAvg">—</div></div>
+      <div class="kpi-card"><div class="kpi-label">필터 적용 결과</div><div class="kpi-val" id="kpiFiltered">—</div></div>
+    </div>
+    <div class="main-hr"></div>
+
+    <!-- Tabs -->
+    <div class="tab-area">
+      <ul class="nav nav-tabs" id="mainTabs">
+        <li class="nav-item"><a class="nav-link active" data-bs-toggle="tab" href="#tMap"     onclick="onTab('map')">지도</a></li>
+        <li class="nav-item"><a class="nav-link"        data-bs-toggle="tab" href="#tList"    onclick="onTab('list')">단지 목록</a></li>
+        <li class="nav-item"><a class="nav-link"        data-bs-toggle="tab" href="#tWeight"  onclick="onTab('weight')">가중치 비교</a></li>
+        <li class="nav-item"><a class="nav-link"        data-bs-toggle="tab" href="#tAlpha"   onclick="onTab('alpha')">Alpha 민감도</a></li>
+        <li class="nav-item"><a class="nav-link"        data-bs-toggle="tab" href="#tMC"      onclick="onTab('mc')">Monte Carlo</a></li>
+        <li class="nav-item"><a class="nav-link"        data-bs-toggle="tab" href="#tCluster" onclick="onTab('cluster')">군집 분석</a></li>
+        <li class="nav-item"><a class="nav-link"        data-bs-toggle="tab" href="#tRegion"  onclick="onTab('regional')">지역별 요약</a></li>
+      </ul>
+
+      <div class="tab-content">
+
+        <!-- ── 지도 ── -->
+        <div class="tab-pane active" id="tMap">
+          <h2 class="st-h2">주거복지 사각지대 탐지 시스템 (Interactive map)</h2>
+          <p class="st-caption">지도 위 각 포인트는 주택관리공단에서 관리 중인 임대주택 단지를 나타냅니다.</p>
+          <div id="mainMap"></div>
+          <div class="leg">
+            <span><span class="dot" style="background:#d62728"></span>고위험(사각지대)</span>
+            <span><span class="dot" style="background:#ff7f0e"></span>중위험(잠재적사각지대)</span>
+            <span><span class="dot" style="background:#1f77b4"></span>관심</span>
+            <span><span class="dot" style="background:#2ca02c"></span>일반</span>
+            <span><span class="dot" style="background:#7f7f7f"></span>신규단지(판정유예)</span>
+            <span><span class="dot" style="background:transparent;border:2px solid darkred;width:10px;height:10px"></span>Robust 고위험(강조)</span>
+          </div>
+          <h3 class="st-h3">고위험 단지 목록</h3>
+          <div class="tbl-wrap">
+            <table class="st" id="hrTable">
+              <thead><tr>
+                <th>단지명</th><th>위험 등급</th><th>취약도(종합)</th><th>Hybrid 점수</th><th>MC 선택빈도</th><th>공급유형</th><th>시도</th><th>시군구</th>
+              </tr></thead>
+              <tbody id="hrTbody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- ── 단지 목록 ── -->
+        <div class="tab-pane" id="tList">
+          <h2 class="st-h2">단지 목록 및 상세 정보</h2>
+          <div class="tbl-wrap">
+            <table class="st">
+              <thead><tr>
+                <th onclick="colSort('단지명')">단지명</th>
+                <th onclick="colSort('사각지대_등급')">위험 등급</th>
+                <th onclick="colSort('취약도_hybrid가중치')">Hybrid↕</th>
+                <th onclick="colSort('취약도_수동가중치')">수동↕</th>
+                <th onclick="colSort('취약도_entropy가중치')">Entropy↕</th>
+                <th onclick="colSort('mc_selection_frequency')">MC빈도↕</th>
+                <th onclick="colSort('mc_mean_rank')">MC순위↕</th>
+                <th onclick="colSort('mc_rank_std')">순위std↕</th>
+                <th>공급유형</th>
+                <th onclick="colSort('sido_kr')">시도↕</th>
+                <th onclick="colSort('sgg_kr')">시군구↕</th>
+                <th onclick="colSort('cluster_label')">군집↕</th>
+                <th>고령화율</th><th>의료접근성</th><th>주요원인</th>
+              </tr></thead>
+              <tbody id="listTbody"></tbody>
+            </table>
+          </div>
+          <div class="pg">
+            <button id="pgPrev" onclick="pgChange(-1)">‹</button>
+            <span id="pgInfo"></span>
+            <button id="pgNext" onclick="pgChange(1)">›</button>
+            <span id="pgTotal" style="color:var(--st-muted)"></span>
+          </div>
+
+          <h3 class="st-h3">단지 상세 정보</h3>
+          <div style="margin-bottom:.4rem">
+            <select id="cxSelect" onchange="showDetail()" style="width:280px;padding:.28rem .5rem;font-size:.8rem;border:1px solid var(--st-border);border-radius:4px"></select>
+          </div>
+          <div class="detail-card">
+            <div class="row">
+              <div class="col-md-5">
+                <h5>기본 정보</h5>
+                <div id="dBasic"></div>
+              </div>
+              <div class="col-md-7">
+                <h5>취약도 점수</h5>
+                <div id="dScores"></div>
+                <h5 style="margin-top:.7rem">도메인별 취약도 구성</h5>
+                <div id="dDomains"></div>
+              </div>
+            </div>
+            <div id="dCause"></div>
+          </div>
+        </div>
+
+        <!-- ── 가중치 비교 ── -->
+        <div class="tab-pane" id="tWeight">
+          <h2 class="st-h2">가중치 방식 비교</h2>
+          <div class="row g-3 align-items-start">
+            <div class="col-lg-7">
+              <div class="cc" style="height:420px">
+                <h6>가중치 방식별 지표 가중치 비교</h6>
+                <canvas id="cWeights" style="max-height:370px"></canvas>
+              </div>
+            </div>
+            <div class="col-lg-5">
+              <div class="cc" style="height:420px">
+                <h6>수동 가중치 점수 vs Hybrid 가중치 점수</h6>
+                <canvas id="cScatter" style="max-height:370px"></canvas>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ── Alpha 민감도 ── -->
+        <div class="tab-pane" id="tAlpha">
+          <h2 class="st-h2">Alpha 민감도 분석</h2>
+          <p class="st-caption">alpha 값에 따라 최종 점수와 고위험 후보군이 어떻게 달라지는지 분석합니다. alpha=1.0은 v2 방식(순수 정책 prior), alpha=0.0은 순수 entropy 방식입니다.</p>
+          <div id="alphaContent">
+            <div class="row">
+              <div class="col-md-6"><div class="cc"><h6>Alpha별 상위 20% 고위험 후보군 Jaccard 유사도 (기준: alpha=0.5)</h6><canvas id="cAJac" height="220"></canvas></div></div>
+              <div class="col-md-6"><div class="cc"><h6>Alpha별 순위 Spearman 상관계수 (기준: alpha=0.5)</h6><canvas id="cASpr" height="220"></canvas></div></div>
+            </div>
+            <div class="row">
+              <div class="col-md-6"><div class="cc"><h6>Alpha별 상위 20% 후보군 overlap 수 (기준: alpha=0.5)</h6><canvas id="cAOvlp" height="220"></canvas></div></div>
+              <div class="col-md-6"><div class="cc"><h6>Alpha별 취약도 점수 평균 및 표준편차</h6><canvas id="cAScore" height="220"></canvas></div></div>
+            </div>
+            <h3 class="st-h3">Alpha 민감도 분석 상세 데이터</h3>
+            <div class="tbl-wrap"><table class="st"><thead><tr id="aHead"></tr></thead><tbody id="aBody"></tbody></table></div>
+          </div>
+        </div>
+
+        <!-- ── Monte Carlo ── -->
+        <div class="tab-pane" id="tMC">
+          <h2 class="st-h2">몬테카를로 가중치 교란 분석</h2>
+          <p class="st-caption">가중치에 무작위 교란(±20%)을 1,000회 이상 반복하여 각 단지의 순위 안정성을 평가합니다. selection frequency가 높을수록 가중치 불확실성에도 안정적으로 고위험으로 분류됩니다.</p>
+          <div class="row g-3">
+            <div class="col-md-6"><div class="cc" style="height:340px"><h6>Monte Carlo 선택 빈도 분포 (log scale)</h6><canvas id="cMCHist" style="max-height:290px"></canvas></div></div>
+            <div class="col-md-6"><div class="cc" style="height:340px"><h6>MC 선택 빈도 vs 평균 순위</h6><canvas id="cMCScatter" style="max-height:290px"></canvas></div></div>
+          </div>
+          <h3 class="st-h3" id="robustTitle">Robust 고위험 단지 목록</h3>
+          <p class="st-caption">hybrid 취약도 상위 20% 이면서 MC selection frequency ≥ 0.7인 단지</p>
+          <div class="tbl-wrap">
+            <table class="st">
+              <thead><tr>
+                <th>단지명</th><th>위험 등급</th><th>취약도(종합)</th><th>MC 선택빈도</th><th>MC 평균순위</th><th>순위 std</th><th>공급유형</th><th>시도</th><th>시군구</th>
+              </tr></thead>
+              <tbody id="rbTbody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- ── 군집 분석 ── -->
+        <div class="tab-pane" id="tCluster">
+          <h2 class="st-h2">군집 분석 결과</h2>
+          <div class="tbl-wrap" style="max-height:180px;margin-bottom:.8rem">
+            <table class="st">
+              <thead><tr><th>군집 번호</th><th>단지수</th><th>평균 취약도</th><th>최대 취약도</th><th>사각지대 단지수</th><th>Robust 고위험</th></tr></thead>
+              <tbody id="clTbody"></tbody>
+            </table>
+          </div>
+          <div class="row g-3">
+            <div class="col-md-6">
+              <div class="cc" style="height:400px">
+                <h6>군집별 평균 취약도 점수</h6>
+                <canvas id="cCluster" style="max-height:350px"></canvas>
+              </div>
+            </div>
+            <div class="col-md-6">
+              <div style="border:1px solid var(--st-border);border-radius:6px;overflow:hidden;height:400px;display:flex;flex-direction:column">
+                <div style="background:var(--st-sec-bg);padding:.5rem .8rem;font-size:.8rem;font-weight:700;border-bottom:1px solid var(--st-border);flex-shrink:0">군집별 단지 분포 지도</div>
+                <div id="clusterMapDiv" style="flex:1"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ── 지역별 요약 ── -->
+        <div class="tab-pane" id="tRegion">
+          <h2 class="st-h2">지역별 취약도 요약</h2>
+          <div class="cc" style="height:320px"><h6>시도별 평균 Hybrid 취약도 점수</h6><canvas id="cSido" style="max-height:270px"></canvas></div>
+          <div class="cc" style="height:420px"><h6>시군구별 평균 취약도 상위 20개</h6><canvas id="cSgg" style="max-height:370px"></canvas></div>
+          <h3 class="st-h3">시군구 취약도 데이터</h3>
+          <div class="tbl-wrap" style="max-height:340px">
+            <table class="st"><thead><tr id="rgHead"></tr></thead><tbody id="rgBody"></tbody></table>
+          </div>
+        </div>
+
+      </div><!-- /tab-content -->
+    </div><!-- /tab-area -->
+  </main>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+<script>
+'use strict';
+
+// ─── Constants ───────────────────────────────────────────────────────────────
+const GRADE_COLOR = {
+  '고위험(사각지대)':       '#d62728',
+  '중위험(잠재적사각지대)': '#ff7f0e',
+  '관심':                  '#1f77b4',
+  '일반':                  '#2ca02c',
+  '신규단지(판정유예)':     '#7f7f7f',
+};
+const CLUSTER_COLORS = ['#1f77b4','#ff7f0e','#2ca02c','#d62728','#9467bd','#8c564b','#e377c2','#7f7f7f','#bcbd22','#17becf'];
+const CLUSTER_NAMES = {
+  '0': 'C0 비영구임대 저고령·커뮤니티 취약형',
+  '1': 'C1 영구임대 고령·노후 대규모 관리형',
+  '2': 'C2 일반/국민임대 저위험 안정형',
+  '3': 'C3 영구임대 고위험 사각지대형',
+  '4': 'C4 장기전세 소규모형',
+};
+function clusterLabel(value) {
+  const key = String(value ?? '').replace(/^C/i, '').trim();
+  return CLUSTER_NAMES[key] || (key ? `C${key}` : '-');
+}
+const PAGE_SIZE = 30;
+
+// ─── State ───────────────────────────────────────────────────────────────────
+let allData = [], regional = [], weights = [], alphaData = [];
+let filtered = [];
+let pg = 1;
+let mainMap = null, mainMarkers = [];
+let clMap = null, clMarkers = [];
+let charts = {};
+let rendered = {};
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+const gc = g => GRADE_COLOR[g] || '#888';
+
+function gb(g) {
+  const m = { '고위험(사각지대)':'H','중위험(잠재적사각지대)':'M','관심':'W','일반':'N','신규단지(판정유예)':'X' };
+  return `<span class="gb gb-${m[g]||'X'}">${g||'—'}</span>`;
+}
+
+function sbar(v, color) {
+  const p = Math.min(100, Math.round((+v || 0) * 100));
+  return `<div class="sb-wrap"><div class="sb-bar"><div class="sb-fill" style="width:${p}%;background:${color}"></div></div><span style="font-size:.73rem">${(+v||0).toFixed(3)}</span></div>`;
+}
+
+function fnum(v, d=4) { return (typeof v === 'number' && !isNaN(v)) ? v.toFixed(d) : (v ?? '—'); }
+
+// ─── CSV loader ───────────────────────────────────────────────────────────────
+function loadCSV(url) {
+  return new Promise((res, rej) => {
+    Papa.parse(url, {
+      download: true, header: true, skipEmptyLines: true, dynamicTyping: true,
+      complete: r => res(r.data),
+      error: e => rej(e)
+    });
+  });
+}
+
+// ─── Init ─────────────────────────────────────────────────────────────────────
+async function init() {
+  try {
+    [allData, regional, weights, alphaData] = await Promise.all([
+      loadCSV('./data/complexes.csv'),
+      loadCSV('./data/regional.csv'),
+      loadCSV('./data/weights.csv'),
+      loadCSV('./data/alpha.csv').catch(() => []),
+    ]);
+
+    // Explicit numeric parsing
+    allData.forEach(d => {
+      d.x = parseFloat(d.x);
+      d.y = parseFloat(d.y);
+      ['취약도_hybrid가중치','취약도_수동가중치','취약도_entropy가중치',
+       '취약도_인구','취약도_시설','취약도_접근성','취약도_서비스이용','취약도_거버넌스','취약도_이상탐지',
+       'mc_selection_frequency','mc_mean_rank','mc_rank_std',
+       '고령화율','접근성_의료종합'].forEach(k => { if (k in d) d[k] = parseFloat(d[k]) || 0; });
+      d.robust_high_risk = parseInt(d.robust_high_risk) || 0;
+      d['취약도_순위'] = parseInt(d['취약도_순위']) || 999;
+      d.cluster_label = d.cluster_label !== null && d.cluster_label !== undefined ? d.cluster_label : '?';
+    });
+
+    buildSidoFilter();
+    buildSupplyFilter();
+    buildGradeFilter();
+    applyFilters();
+    initMainMap();
+
+    document.getElementById('loadingOverlay').style.display = 'none';
+  } catch(e) {
+    document.getElementById('loadingOverlay').innerHTML = `
+      <div style="text-align:center;padding:2rem">
+        <div style="font-size:2.5rem">⚠️</div>
+        <p style="margin-top:.8rem;color:#d62728;font-weight:600">데이터를 불러오지 못했습니다.</p>
+        <p style="color:#888;font-size:.82rem">이 파일은 웹 서버(GitHub Pages)에서 실행해야 합니다.<br>로컬 file:// 프로토콜에서는 CORS 제한이 있습니다.</p>
+        <pre style="color:#aaa;font-size:.7rem;margin-top:.5rem">${e}</pre>
+      </div>`;
+  }
+}
+
+// ─── Sidebar filter builders ───────────────────────────────────────────────────
+function buildSidoFilter() {
+  const sel = document.getElementById('fSido');
+  [...new Set(allData.map(d => d.sido_kr).filter(Boolean))].sort().forEach(s => {
+    const o = document.createElement('option'); o.value = s; o.textContent = s; sel.appendChild(o);
+  });
+}
+
+function onSidoChange() {
+  const sido = document.getElementById('fSido').value;
+  const sel = document.getElementById('fSgg');
+  sel.innerHTML = '<option value="">전체</option>';
+  if (sido) {
+    [...new Set(allData.filter(d => d.sido_kr === sido).map(d => d.sgg_kr).filter(Boolean))].sort()
+      .forEach(s => { const o = document.createElement('option'); o.value = s; o.textContent = s; sel.appendChild(o); });
+  }
+  applyFilters();
+}
+
+function buildSelectFilter(id, values) {
+  const sel = document.getElementById(id);
+  sel.innerHTML = '<option value="" selected>전체</option>';
+  values.forEach(v => {
+    const o = document.createElement('option'); o.value = v; o.textContent = v; sel.appendChild(o);
+  });
+}
+
+function getSelectVals(id) {
+  const sel = document.getElementById(id);
+  const vals = [...sel.options].filter(o => o.selected).map(o => o.value);
+  if (!vals.length || vals.includes('')) return [];
+  return vals;
+}
+
+function splitSupplyTypes(value) {
+  return String(value || '')
+    .split(',')
+    .map(s => s.trim())
+    .filter(Boolean);
+}
+
+function buildSupplyFilter() {
+  const values = [...new Set(allData.flatMap(d => splitSupplyTypes(d['공급유형'])))].sort();
+  buildSelectFilter('fSupply', values);
+}
+function buildGradeFilter() {
+  buildSelectFilter('fGrade', [...new Set(allData.map(d => d['사각지대_등급']).filter(Boolean))].sort());
+}
+
+// ─── Apply filters ─────────────────────────────────────────────────────────────
+function applyFilters() {
+  const sido   = document.getElementById('fSido').value;
+  const sgg    = document.getElementById('fSgg').value;
+  const search = document.getElementById('fSearch').value.trim().toLowerCase();
+  const hiOnly = document.getElementById('fHighOnly').checked;
+  const rbOnly = document.getElementById('fRobust').checked;
+  const sKey   = document.getElementById('sortCol').value;
+  const sAsc   = document.getElementById('sortAsc').checked;
+  const supVals = getSelectVals('fSupply');
+  const grVals  = getSelectVals('fGrade');
+
+  filtered = allData.filter(d => {
+    if (sido && d.sido_kr !== sido) return false;
+    if (sgg  && d.sgg_kr  !== sgg)  return false;
+    if (supVals.length) {
+      const sup = splitSupplyTypes(d['공급유형']);
+      if (!supVals.some(sv => sup.includes(sv))) return false;
+    }
+    if (grVals.length && !grVals.includes(d['사각지대_등급'])) return false;
+    if (hiOnly && d['사각지대_등급'] !== '고위험(사각지대)') return false;
+    if (rbOnly && !d.robust_high_risk) return false;
+    if (search && !(d['단지명'] || '').toLowerCase().includes(search)) return false;
+    return true;
+  });
+
+  filtered.sort((a, b) => {
+    const av = a[sKey], bv = b[sKey];
+    if (typeof av === 'number') return sAsc ? av - bv : bv - av;
+    return sAsc ? String(av||'').localeCompare(String(bv||''), 'ko') : String(bv||'').localeCompare(String(av||''), 'ko');
+  });
+
+  pg = 1;
+  updateKPI();
+  renderHRTable();
+  renderListTable();
+  updateComplexSelect();
+  updateMainMarkers();
+  if (rendered.mc) renderMC();
+  if (rendered.cluster) { renderClusterTable(); updateClusterMarkers(); }
+  if (rendered.regional) renderRegional();
+}
+
+// ─── KPI ──────────────────────────────────────────────────────────────────────
+function updateKPI() {
+  const t = filtered.length;
+  const h = filtered.filter(d => d['사각지대_등급'] === '고위험(사각지대)').length;
+  const r = filtered.filter(d => d.robust_high_risk).length;
+  const avg = t ? (filtered.reduce((s, d) => s + (d['취약도_hybrid가중치'] || 0), 0) / t) : 0;
+  document.getElementById('kpiTotal').textContent   = t.toLocaleString();
+  document.getElementById('kpiHigh').textContent    = h.toLocaleString();
+  document.getElementById('kpiHighPct').textContent = `${t ? (h/t*100).toFixed(1) : 0}%`;
+  document.getElementById('kpiRobust').textContent  = r.toLocaleString();
+  document.getElementById('kpiAvg').textContent     = avg.toFixed(3);
+  document.getElementById('kpiFiltered').textContent = `${t} / ${allData.length}`;
+}
+
+// ─── Map ──────────────────────────────────────────────────────────────────────
+function initMainMap() {
+  const valid = allData.filter(d => isFinite(d.y) && isFinite(d.x) && d.y && d.x);
+  const lat0 = valid.length ? valid.reduce((s, d) => s + d.y, 0) / valid.length : 36.5;
+  const lng0 = valid.length ? valid.reduce((s, d) => s + d.x, 0) / valid.length : 127.8;
+  mainMap = L.map('mainMap', { preferCanvas: true }).setView([lat0, lng0], 7);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© OpenStreetMap contributors', maxZoom: 18
+  }).addTo(mainMap);
+  updateMainMarkers();
+}
+
+function updateMainMarkers() {
+  if (!mainMap) return;
+  mainMarkers.forEach(m => m.remove());
+  mainMarkers = [];
+  filtered.forEach(d => {
+    if (!isFinite(d.y) || !isFinite(d.x) || !d.y || !d.x) return;
+    const color = gc(d['사각지대_등급']);
+    const robust = d.robust_high_risk === 1;
+    const r = d['사각지대_등급'] === '고위험(사각지대)' ? 8 : 5;
+    const m = L.circleMarker([d.y, d.x], {
+      radius: r, fillColor: color, color: robust ? 'darkred' : color,
+      weight: robust ? 2.5 : 1, opacity: 1, fillOpacity: 0.8
+    }).bindPopup(`
+      <div class="popup-n">${d['단지명'] || '—'}</div>
+      <div class="popup-i">${d.sido_kr || ''} ${d.sgg_kr || ''}</div>
+      <div class="popup-i" style="margin-top:3px">
+        ${gb(d['사각지대_등급'])}
+        <span style="margin-left:5px">Hybrid: <b>${(d['취약도_hybrid가중치'] || 0).toFixed(3)}</b></span>
+      </div>
+      <div class="popup-i">MC 빈도: ${(d.mc_selection_frequency || 0).toFixed(2)}${robust ? ' · <b style="color:darkred">Robust</b>' : ''}</div>
+      <div class="popup-i" style="color:#999;margin-top:2px">${(d['취약_주요원인'] || '').substring(0, 60)}</div>
+    `).addTo(mainMap);
+    mainMarkers.push(m);
+  });
+}
+
+// ─── High-risk table ──────────────────────────────────────────────────────────
+function renderHRTable() {
+  const rows = filtered.filter(d => d['사각지대_등급'] === '고위험(사각지대)').slice(0, 20);
+  document.getElementById('hrTbody').innerHTML = rows.map(d => `<tr>
+    <td><b>${d['단지명'] || '—'}</b></td>
+    <td>${gb(d['사각지대_등급'])}</td>
+    <td>${sbar(d['취약도_hybrid가중치'], gc(d['사각지대_등급']))}</td>
+    <td>${(d['취약도_hybrid가중치'] || 0).toFixed(3)}</td>
+    <td>${(d.mc_selection_frequency || 0).toFixed(2)}</td>
+    <td><small>${(d['공급유형'] || '').substring(0,12)}</small></td>
+    <td><small>${d.sido_kr || '—'}</small></td>
+    <td><small>${d.sgg_kr || '—'}</small></td>
+  </tr>`).join('');
+}
+
+// ─── List table ───────────────────────────────────────────────────────────────
+function colSort(key) {
+  document.getElementById('sortCol').value = key;
+  document.getElementById('sortAsc').checked = false;
+  applyFilters();
+}
+
+function renderListTable() {
+  const total = filtered.length;
+  const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  if (pg > pages) pg = pages;
+  const s = (pg - 1) * PAGE_SIZE, e = Math.min(s + PAGE_SIZE, total);
+  document.getElementById('listTbody').innerHTML = filtered.slice(s, e).map(d => `<tr>
+    <td><b>${d['단지명'] || '—'}</b></td>
+    <td>${gb(d['사각지대_등급'])}</td>
+    <td>${sbar(d['취약도_hybrid가중치'], gc(d['사각지대_등급']))}</td>
+    <td>${fnum(d['취약도_수동가중치'], 3)}</td>
+    <td>${fnum(d['취약도_entropy가중치'], 3)}</td>
+    <td>${fnum(d.mc_selection_frequency, 2)}</td>
+    <td>${fnum(d.mc_mean_rank, 2)}</td>
+    <td>${fnum(d.mc_rank_std, 3)}</td>
+    <td><small>${(d['공급유형'] || '').substring(0,12)}</small></td>
+    <td><small>${d.sido_kr || '—'}</small></td>
+    <td><small>${d.sgg_kr || '—'}</small></td>
+    <td>${clusterLabel(d.cluster_label)}</td>
+    <td>${fnum(d['고령화율'], 3)}</td>
+    <td>${fnum(d['접근성_의료종합'], 3)}</td>
+    <td><small style="color:#888">${(d['취약_주요원인'] || '').substring(0,30)}</small></td>
+  </tr>`).join('');
+  document.getElementById('pgInfo').textContent = `${s+1}–${e}`;
+  document.getElementById('pgTotal').textContent = `/ ${total}개`;
+  document.getElementById('pgPrev').disabled = pg <= 1;
+  document.getElementById('pgNext').disabled = pg >= pages;
+}
+
+function pgChange(dir) { pg += dir; renderListTable(); }
+
+// ─── Complex detail ───────────────────────────────────────────────────────────
+function updateComplexSelect() {
+  const sel = document.getElementById('cxSelect');
+  const prev = sel.value;
+  sel.innerHTML = filtered.map(d => `<option value="${(d['단지명'] || '').replace(/"/g,'&quot;')}">${d['단지명'] || ''}</option>`).join('');
+  if (prev && filtered.find(d => d['단지명'] === prev)) sel.value = prev;
+  showDetail();
+}
+
+function showDetail() {
+  const name = document.getElementById('cxSelect').value;
+  const d = filtered.find(r => r['단지명'] === name) || filtered[0];
+  if (!d) return;
+  const BF = [['단지명','단지명'],['공급유형','공급유형'],['sido_kr','시도'],['sgg_kr','시군구'],['사각지대_등급','위험 등급'],['cluster_label','군집']];
+  document.getElementById('dBasic').innerHTML = BF.map(([k,l]) =>
+    d[k] !== undefined && d[k] !== null && d[k] !== ''
+      ? `<div class="d-field"><div class="lbl">${l}</div><div class="val">${d[k]}</div></div>`
+      : '').join('');
+  const SF = ['취약도_hybrid가중치','취약도_수동가중치','취약도_entropy가중치','mc_selection_frequency'];
+  document.getElementById('dScores').innerHTML = SF.map(k =>
+    k in d ? `<div class="d-field"><div class="lbl">${k}</div><div class="val" style="font-weight:700">${fnum(d[k])}</div></div>` : '').join('');
+  const DOMS = [['인구','취약도_인구'],['시설','취약도_시설'],['접근성','취약도_접근성'],['서비스이용','취약도_서비스이용'],['거버넌스','취약도_거버넌스'],['이상탐지','취약도_이상탐지']];
+  document.getElementById('dDomains').innerHTML = DOMS.map(([l, k]) => {
+    const v = d[k] || 0;
+    return `<div class="dom-row"><span class="dom-lbl">${l}</span><div class="dom-bar"><div class="dom-fill" style="width:${Math.round(v*100)}%"></div></div><span class="dom-val">${v.toFixed(3)}</span></div>`;
+  }).join('');
+  const cause = d['취약_주요원인'];
+  document.getElementById('dCause').innerHTML = (cause && String(cause) !== 'nan' && String(cause) !== 'None')
+    ? `<div class="info-box" style="margin-top:.7rem"><b>주요 취약 원인:</b> ${cause}</div>` : '';
+}
+
+// ─── Tab switch ───────────────────────────────────────────────────────────────
+function onTab(tab) {
+  setTimeout(() => {
+    if (tab === 'map') mainMap && mainMap.invalidateSize();
+    if (tab === 'cluster') { clMap && clMap.invalidateSize(); }
+    if (!rendered[tab]) {
+      rendered[tab] = true;
+      if (tab === 'weight')   renderWeights();
+      if (tab === 'alpha')    renderAlpha();
+      if (tab === 'mc')       renderMC();
+      if (tab === 'cluster')  { renderClusterTable(); initClusterMap(); }
+      if (tab === 'regional') renderRegional();
+    }
+  }, 80);
+}
+
+// ─── Chart helpers ────────────────────────────────────────────────────────────
+Chart.defaults.color = '#262730';
+Chart.defaults.borderColor = '#e0e0e0';
+
+function dChart(id) { if (charts[id]) { charts[id].destroy(); delete charts[id]; } }
+
+function barChart(id, labels, datasets, horiz = false) {
+  dChart(id);
+  charts[id] = new Chart(document.getElementById(id), {
+    type: 'bar',
+    data: { labels, datasets },
+    options: {
+      responsive: true,
+      indexAxis: horiz ? 'y' : 'x',
+      plugins: { legend: { position: 'top', labels: { font: { size: 11 } } } },
+      scales: {
+        x: { grid: { color: '#eee' }, ticks: { font: { size: 10 } } },
+        y: { grid: { color: '#eee' }, ticks: { font: { size: 10 } } }
+      }
+    }
+  });
+}
+
+function lineChart(id, labels, datasets, yMin, yMax) {
+  dChart(id);
+  charts[id] = new Chart(document.getElementById(id), {
+    type: 'line',
+    data: { labels, datasets },
+    options: {
+      responsive: true,
+      plugins: { legend: { position: 'top' } },
+      scales: {
+        x: { grid: { color: '#eee' }, ticks: { font: { size: 10 } } },
+        y: { grid: { color: '#eee' }, ticks: { font: { size: 10 } }, min: yMin, max: yMax }
+      }
+    }
+  });
+}
+
+// ─── Weight tab ───────────────────────────────────────────────────────────────
+function renderWeights() {
+  if (!weights.length) return;
+
+  const labels  = weights.map(w => (w['지표명'] || '').replace(/^v_/, ''));
+  const prior   = weights.map(w => +(w['정책_prior_가중치'] || 0));
+  const entropy = weights.map(w => +(w['entropy_가중치']    || 0));
+  const hybrid  = weights.map(w => +(w['hybrid_가중치']     || 0));
+
+  dChart('cWeights');
+  charts['cWeights'] = new Chart(document.getElementById('cWeights'), {
+    type: 'bar',
+    data: { labels, datasets: [
+      { label:'정책 Prior', data: prior,   backgroundColor:'rgba(31,119,180,.7)', borderColor:'transparent' },
+      { label:'Entropy',   data: entropy, backgroundColor:'rgba(255,127,14,.7)', borderColor:'transparent' },
+      { label:'Hybrid',    data: hybrid,  backgroundColor:'rgba(44,160,44,.7)',  borderColor:'transparent' },
+    ]},
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      indexAxis: 'y',
+      plugins: { legend: { position:'top', labels:{ font:{ size:11 } } } },
+      scales: {
+        x: { grid:{ color:'#eee' }, ticks:{ font:{ size:10 } } },
+        y: { grid:{ color:'#eee' }, ticks:{ font:{ size:10 } } }
+      }
+    }
+  });
+
+  dChart('cScatter');
+  charts['cScatter'] = new Chart(document.getElementById('cScatter'), {
+    type: 'scatter',
+    data: {
+      datasets: [
+        ...Object.keys(GRADE_COLOR).map(g => ({
+          label: g,
+          data: allData.filter(d => d['사각지대_등급'] === g).map(d => ({ x: d['취약도_수동가중치'], y: d['취약도_hybrid가중치'] })),
+          backgroundColor: GRADE_COLOR[g] + 'aa', pointRadius: 4,
+        })),
+        { type: 'line', label: 'y=x 기준선', data: [{x:0,y:0},{x:1.1,y:1.1}], borderColor:'gray', borderDashOffset:[5,5], backgroundColor:'transparent', pointRadius:0, borderWidth:1.5 }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { position:'top', labels:{ font:{ size:10 } } } },
+      scales: {
+        x: { title:{ display:true, text:'수동 가중치 점수 (v2)', font:{ size:11 } }, grid:{ color:'#eee' } },
+        y: { title:{ display:true, text:'Hybrid 가중치 점수 (v3)', font:{ size:11 } }, grid:{ color:'#eee' } }
+      }
+    }
+  });
+}
+
+// ─── Alpha tab ────────────────────────────────────────────────────────────────
+function renderAlpha() {
+  if (!alphaData.length) {
+    document.getElementById('alphaContent').innerHTML = '<div class="warn-box">Alpha 민감도 분석 데이터가 없습니다. v3 노트북을 먼저 실행해 주세요.</div>';
+    return;
+  }
+  const aVals = alphaData.map(r => r.alpha);
+  const LS = { tension:.3, pointRadius:5 };
+  lineChart('cAJac', aVals,
+    [{ label:'Jaccard 유사도', data: alphaData.map(r => r.jaccard_vs_alpha05), borderColor:'#1f77b4', backgroundColor:'rgba(31,119,180,.12)', fill:true, ...LS }], 0, 1.05);
+  lineChart('cASpr', aVals,
+    [{ label:'Spearman 상관계수', data: alphaData.map(r => r.spearman_vs_alpha05), borderColor:'#dd8452', backgroundColor:'rgba(221,132,82,.12)', fill:true, ...LS }], 0, 1.05);
+  barChart('cAOvlp', aVals,
+    [{ label:'Overlap 단지 수', data: alphaData.map(r => r.topk_overlap_count), backgroundColor: aVals.map((_,i)=>`hsl(${200+i*20},55%,55%)`), borderColor:'transparent' }]);
+  lineChart('cAScore', aVals, [
+    { label:'score_mean', data: alphaData.map(r => r.score_mean), borderColor:'#2ca02c', ...LS },
+    { label:'score_std',  data: alphaData.map(r => r.score_std),  borderColor:'#d62728', borderDash:[4,4], ...LS },
+  ]);
+  const cols = Object.keys(alphaData[0]);
+  document.getElementById('aHead').innerHTML = cols.map(c => `<th>${c}</th>`).join('');
+  document.getElementById('aBody').innerHTML = alphaData.map(r =>
+    `<tr>${cols.map(c => `<td>${typeof r[c]==='number' ? r[c].toFixed(4) : (r[c]||'')}</td>`).join('')}</tr>`).join('');
+}
+
+// ─── Monte Carlo tab ──────────────────────────────────────────────────────────
+function renderMC() {
+  const bins = 10;
+  const counts = Array(bins).fill(0);
+  const bLabels = Array.from({length:bins}, (_,i) => `${(i/10).toFixed(1)}–${((i+1)/10).toFixed(1)}`);
+  filtered.forEach(d => { counts[Math.min(bins-1, Math.floor((d.mc_selection_frequency||0) * bins))]++; });
+
+  dChart('cMCHist');
+  charts['cMCHist'] = new Chart(document.getElementById('cMCHist'), {
+    type: 'bar',
+    data: { labels: bLabels, datasets: [{
+      label:'단지 수', data: counts,
+      backgroundColor: bLabels.map((_,i) => i>=7?'rgba(214,39,40,.8)':i>=4?'rgba(255,127,14,.7)':'rgba(31,119,180,.6)'),
+      borderColor:'transparent'
+    }]},
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend:{ position:'top' } },
+      scales: {
+        x: { grid:{color:'#eee'}, ticks:{font:{size:10}} },
+        y: { type:'logarithmic', grid:{color:'#eee'}, ticks:{
+          font:{size:10},
+          callback: v => (v===1||v===10||v===100||v===1000) ? v : null
+        }}
+      }
+    }
+  });
+
+  dChart('cMCScatter');
+  charts['cMCScatter'] = new Chart(document.getElementById('cMCScatter'), {
+    type: 'scatter',
+    data: {
+      datasets: Object.keys(GRADE_COLOR).map(g => ({
+        label: g,
+        data: filtered.filter(d => d['사각지대_등급'] === g).map(d => ({ x: d.mc_selection_frequency, y: d['취약도_순위'] })),
+        backgroundColor: GRADE_COLOR[g] + 'aa', pointRadius: 4,
+      }))
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend:{ position:'top', labels:{font:{size:10}} } },
+      scales: {
+        x: { title:{display:true,text:'MC 선택 빈도',font:{size:11}}, min:0, max:1, grid:{color:'#eee'} },
+        y: { title:{display:true,text:'취약도 순위',font:{size:11}}, grid:{color:'#eee'}, reverse:true }
+      }
+    }
+  });
+
+  const robust = filtered.filter(d => (d.mc_selection_frequency||0) >= 0.7).sort((a,b)=>b.mc_selection_frequency-a.mc_selection_frequency);
+  document.getElementById('robustTitle').textContent = `Robust 고위험 단지 목록 (총 ${robust.length}개)`;
+  document.getElementById('rbTbody').innerHTML = robust.map(d => `<tr>
+    <td><b>${d['단지명']||'—'}</b></td>
+    <td>${gb(d['사각지대_등급'])}</td>
+    <td>${fnum(d['취약도_hybrid가중치'],3)}</td>
+    <td><b style="color:#d62728">${fnum(d.mc_selection_frequency,2)}</b></td>
+    <td>${fnum(d.mc_mean_rank,2)}</td>
+    <td>${fnum(d.mc_rank_std,3)}</td>
+    <td><small>${(d['공급유형']||'').substring(0,12)}</small></td>
+    <td><small>${d.sido_kr||'—'}</small></td>
+    <td><small>${d.sgg_kr||'—'}</small></td>
+  </tr>`).join('');
+}
+
+// ─── Cluster tab ──────────────────────────────────────────────────────────────
+function renderClusterTable() {
+  const cm = {};
+  filtered.forEach(d => {
+    const c = String(d.cluster_label);
+    if (!cm[c]) cm[c] = { count:0, scores:[], high:0, robust:0 };
+    cm[c].count++;
+    cm[c].scores.push(d['취약도_hybrid가중치']||0);
+    if (d['사각지대_등급']==='고위험(사각지대)') cm[c].high++;
+    if (d.robust_high_risk) cm[c].robust++;
+  });
+  const rows = Object.entries(cm).sort((a,b)=>a[0].localeCompare(b[0],'ko',{numeric:true})).map(([k,v])=>({
+    k, count:v.count, avg:(v.scores.reduce((s,x)=>s+x,0)/v.scores.length).toFixed(3),
+    max:Math.max(...v.scores).toFixed(3), high:v.high, robust:v.robust
+  }));
+  document.getElementById('clTbody').innerHTML = rows.map(r=>
+    `<tr><td>${clusterLabel(r.k)}</td><td>${r.count}</td><td>${r.avg}</td><td>${r.max}</td><td>${r.high}</td><td>${r.robust}</td></tr>`).join('');
+  dChart('cCluster');
+  charts['cCluster'] = new Chart(document.getElementById('cCluster'), {
+    type: 'bar',
+    data: { labels: rows.map(r=>`C${r.k}`), datasets: [{
+      label:'평균 취약도', data: rows.map(r=>r.avg),
+      backgroundColor: rows.map((_,i)=>CLUSTER_COLORS[i%CLUSTER_COLORS.length]+'bb'), borderColor:'transparent'
+    }]},
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend:{ position:'top' } },
+      scales: {
+        x: { grid:{color:'#eee'}, ticks:{font:{size:11}} },
+        y: { grid:{color:'#eee'}, ticks:{font:{size:11}}, beginAtZero:true }
+      }
+    }
+  });
+}
+
+function initClusterMap() {
+  const valid = filtered.filter(d => isFinite(d.y) && isFinite(d.x) && d.y && d.x);
+  const lat0 = valid.length ? valid.reduce((s,d)=>s+d.y,0)/valid.length : 36.5;
+  const lng0 = valid.length ? valid.reduce((s,d)=>s+d.x,0)/valid.length : 127.8;
+  if (!clMap) {
+    clMap = L.map('clusterMapDiv', { preferCanvas: true }).setView([lat0, lng0], 7);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution:'© OpenStreetMap contributors' }).addTo(clMap);
+  }
+  updateClusterMarkers();
+}
+
+function updateClusterMarkers() {
+  if (!clMap) return;
+  clMarkers.forEach(m => m.remove()); clMarkers = [];
+  filtered.forEach(d => {
+    if (!isFinite(d.y)||!isFinite(d.x)||!d.y||!d.x) return;
+    const ci = (parseInt(d.cluster_label)||0) % CLUSTER_COLORS.length;
+    const m = L.circleMarker([d.y,d.x],{ radius:5, fillColor:CLUSTER_COLORS[ci], color:CLUSTER_COLORS[ci], weight:1, opacity:.9, fillOpacity:.78 })
+      .bindPopup(`<div class="popup-n">${d['단지명']}</div><div class="popup-i">${clusterLabel(d.cluster_label)} | ${d.sido_kr||''}</div>`)
+      .addTo(clMap);
+    clMarkers.push(m);
+  });
+}
+
+// ─── Regional tab ─────────────────────────────────────────────────────────────
+function renderRegional() {
+  // Build English → Korean lookup maps from full dataset
+  const sidoKrMap = {}, sggKrMap = {};
+  allData.forEach(d => {
+    if (d.sido_nm_e && d.sido_kr) sidoKrMap[d.sido_nm_e] = d.sido_kr;
+    if (d.sgg_nm_e  && d.sgg_kr)  sggKrMap[d.sgg_nm_e]  = d.sgg_kr;
+  });
+
+  // 시도별 차트 — 한글명 사용
+  const sidoAgg = {};
+  filtered.forEach(d => {
+    const s = d.sido_kr || d.sido_nm_e || '기타';
+    if (!sidoAgg[s]) sidoAgg[s] = [];
+    sidoAgg[s].push(d['취약도_hybrid가중치']||0);
+  });
+  const sidoE = Object.entries(sidoAgg).map(([s,v])=>({ s, avg:v.reduce((a,x)=>a+x,0)/v.length })).sort((a,b)=>b.avg-a.avg);
+
+  dChart('cSido');
+  charts['cSido'] = new Chart(document.getElementById('cSido'), {
+    type: 'bar',
+    data: { labels: sidoE.map(e=>e.s), datasets: [{
+      label:'평균 취약도 (Hybrid)', data: sidoE.map(e=>+e.avg.toFixed(4)),
+      backgroundColor: sidoE.map(e=>e.avg>0.5?'rgba(214,39,40,.7)':e.avg>0.4?'rgba(255,127,14,.7)':'rgba(31,119,180,.7)'),
+      borderColor:'transparent'
+    }]},
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      indexAxis: 'y',
+      plugins: { legend:{ position:'top' } },
+      scales: {
+        x: { grid:{color:'#eee'}, ticks:{font:{size:10}} },
+        y: { grid:{color:'#eee'}, ticks:{font:{size:11}} }
+      }
+    }
+  });
+
+  if (regional.length) {
+    // 시군구 상위 20 차트 — 한글명 사용
+    const top20 = [...regional].sort((a,b)=>(b['평균_취약도']||0)-(a['평균_취약도']||0)).slice(0,20);
+    const sggLabel = r => sggKrMap[r.sgg_nm_e] || r.sgg_nm_e || '기타';
+
+    dChart('cSgg');
+    charts['cSgg'] = new Chart(document.getElementById('cSgg'), {
+      type: 'bar',
+      data: { labels: top20.map(sggLabel), datasets: [{
+        label:'평균 취약도', data: top20.map(r=>+(r['평균_취약도']||0).toFixed(4)),
+        backgroundColor:'rgba(31,119,180,.7)', borderColor:'transparent'
+      }]},
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        indexAxis: 'y',
+        plugins: { legend:{ position:'top' } },
+        scales: {
+          x: { grid:{color:'#eee'}, ticks:{font:{size:10}} },
+          y: { grid:{color:'#eee'}, ticks:{font:{size:10}} }
+        }
+      }
+    });
+
+    // 테이블 — 영문 코드 컬럼 숨기고 한글명 표시
+    const COL_RENAME = {
+      'sido_cd': null, 'sgg_cd': null,
+      'sido_nm_e': '시도', 'sgg_nm_e': '시군구',
+      '단지수': '단지수', '평균_취약도': '평균 취약도', '최대_취약도': '최대 취약도',
+      '사각지대_단지수': '사각지대 단지수', 'mc_robust_단지수': 'Robust 단지수',
+      '평균_고령화율': '평균 고령화율', '평균_접근성_취약도': '평균 접근성 취약도',
+      '사각지대_비율': '사각지대 비율'
+    };
+    const cols = Object.keys(regional[0]).filter(c => COL_RENAME[c] !== null);
+    document.getElementById('rgHead').innerHTML = cols.map(c=>`<th>${COL_RENAME[c] ?? c.replace(/_/g,' ')}</th>`).join('');
+    document.getElementById('rgBody').innerHTML = regional.map(r=>`<tr>${cols.map(c => {
+      if (c === 'sido_nm_e') return `<td>${sidoKrMap[r[c]] || r[c] || ''}</td>`;
+      if (c === 'sgg_nm_e')  return `<td>${sggKrMap[r[c]]  || r[c] || ''}</td>`;
+      return `<td>${typeof r[c]==='number' ? r[c].toFixed(4) : (r[c]||'')}</td>`;
+    }).join('')}</tr>`).join('');
+  }
+}
+
+// ─── Boot ────────────────────────────────────────────────────────────────────
+init();
+</script>
+</body>
+</html>

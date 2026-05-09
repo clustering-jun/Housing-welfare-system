@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>주거복지 프로그램 추천 시스템</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./styles.css" />
+  <link rel="stylesheet" href="../_shared/system-nav.css" />
+</head>
+<body>
+  <nav class="system-switcher" aria-label="통합 시스템 이동">
+    <a href="../">통합 홈</a>
+    <a href="../blindspot/">사각지대 탐지</a>
+    <a class="active" href="./">프로그램 추천</a>
+  </nav>
+  <header class="topbar">
+    <div>
+      <h1>주거복지 프로그램 추천 시스템</h1>
+      <p>주택관리공단</p>
+    </div>
+    <div class="stats">
+      <div><strong id="statTotal">-</strong><span>전체 단지</span></div>
+      <div><strong id="statBlindspot">-</strong><span>사각지대</span></div>
+      <div><strong id="statRobust">-</strong><span>강건 고위험</span></div>
+    </div>
+  </header>
+
+  <main class="layout">
+    <aside class="sidebar">
+      <div class="controls">
+        <div class="search-row">
+          <input id="searchInput" type="search" placeholder="단지명, 지역명 검색" />
+          <button id="searchBtn">검색</button>
+        </div>
+        <div class="filter-row">
+          <select id="riskFilter">
+            <option value="all">전체 위험도</option>
+            <option value="blindspot">사각지대 단지</option>
+            <option value="high">고위험(0.6+)</option>
+            <option value="medium">중위험(0.4~0.6)</option>
+            <option value="low">저위험(~0.4)</option>
+          </select>
+          <select id="clusterFilter">
+            <option value="all">전체 클러스터</option>
+          </select>
+        </div>
+      </div>
+      <div class="list-head"><span>단지 목록</span><strong id="listCount">-</strong></div>
+      <div id="complexList" class="complex-list"></div>
+    </aside>
+
+    <section class="map-wrap">
+      <div id="map"></div>
+      <div class="legend">
+        <b>취약도</b>
+        <span><i class="dot high"></i>고위험</span>
+        <span><i class="dot med"></i>중위험</span>
+        <span><i class="dot warn"></i>주의</span>
+        <span><i class="dot low"></i>양호</span>
+      </div>
+    </section>
+  </main>
+
+  <aside id="reportPanel" class="report-panel">
+    <div class="report-head">
+      <div>
+        <h2 id="reportTitle">단지를 선택하세요</h2>
+        <p id="reportSubtitle"></p>
+      </div>
+      <button id="closeReport" class="close-btn">×</button>
+    </div>
+    <div id="reportBadges" class="badges"></div>
+    <div id="reportBody" class="report-body">
+      <div class="empty">지도 또는 목록에서 단지를 선택하세요.</div>
+    </div>
+  </aside>
+
+  <script src="./app.js"></script>
+</body>
+</html>
