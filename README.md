@@ -20,9 +20,6 @@
         <a href="https://www.youtube.com/???????" target="_blank">
             <img src="https://img.shields.io/badge/Presentation-%23FF0000.svg?logo=YouTube&logoColor=white" alt="Presentation">
         </a>
-        <a href="https://www.youtube.com/???????" target="_blank">
-            <img src="https://img.shields.io/badge/Demo%20Video-%23FF0000.svg?logo=YouTube&logoColor=white" alt="Demo Video">
-        </a>
         <a href="https://clustering-jun.github.io/Housing-welfare-system/" target="_blank">
             <img src="https://img.shields.io/badge/Web%20Demo-4285F4.svg?logo=googlechrome&logoColor=white" alt="Web Demo">
         </a>
