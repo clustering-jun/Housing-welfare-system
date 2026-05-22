@@ -14,9 +14,6 @@
 
 <div>
     <h4 align="center">
-        <a href="FinalReport.pdf" target="_blank">
-            <img src="https://img.shields.io/badge/-최종%20결과%20보고서-brightgreen" alt="최종 결과 보고서">
-        </a>
         <a href="https://www.youtube.com/???????" target="_blank">
             <img src="https://img.shields.io/badge/Presentation-%23FF0000.svg?logo=YouTube&logoColor=white" alt="Presentation">
         </a>
