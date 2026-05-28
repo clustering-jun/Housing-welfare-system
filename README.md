@@ -19,8 +19,6 @@
         </a>
         <a href="https://clustering-jun.github.io/Housing-welfare-system/" target="_blank">
             <img src="https://img.shields.io/badge/Web%20Demo-4285F4.svg?logo=googlechrome&logoColor=white" alt="Web Demo">
-        </a>
-        <img alt="GitHub Repo stars" src="https://img.shields.io/github/stars/clustering-jun/GreenNet">
     </h4>
 </div>
 </div>
